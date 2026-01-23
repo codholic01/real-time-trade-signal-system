@@ -1,6 +1,10 @@
 import json
 import websocket
 import requests
+from ranking.ranker import update_ranking
+from db.database import store_signal
+
+
 
 # Binance WebSocket URL for real-time BTC/USDT trades
 BINANCE_WS_URL = "wss://stream.binance.com:9443/ws/btcusdt@trade"
@@ -10,15 +14,15 @@ ENGINE_URL = "http://127.0.0.1:18080/event"
 
 
 def send_to_engine(event):
-    """
-    Sends normalized market event to the C++ signal engine
-    and prints the returned signal.
-    """
-    try:
-        response = requests.post(ENGINE_URL, json=event, timeout=1)
-        print("Signal:", response.json())
-    except Exception as e:
-        print("Error sending to engine:", e)
+    response = requests.post(ENGINE_URL, json=event, timeout=1)
+    signal = response.json()
+
+    print("Signal:", signal)
+
+    update_ranking(signal)   # Step 4
+    store_signal(signal)     # Step 6
+
+
 
 
 def on_message(ws, message):

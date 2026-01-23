@@ -1,25 +1,39 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
+from ranking.ranker import get_top_k
+import redis
+import json
 
-app = FastAPI()
+app = FastAPI(title="Real-Time Signal API")
 
-# Temporary in-memory signals (later Redis)
-signals = [
-    {"symbol": "BTCUSDT", "score": 82},
-    {"symbol": "ETHUSDT", "score": 65},
-    {"symbol": "SOLUSDT", "score": 40}
-]
+# Redis connection
+r = redis.Redis(host="localhost", port=6379, decode_responses=True)
+
 
 @app.get("/health")
-def health_check():
+def health():
     return {"status": "ok"}
 
+
 @app.get("/signals/top")
-def get_top_signals(limit: int = 5):
-    return signals[:limit]
+def top_signals(k: int = Query(5, ge=1, le=20)):
+    """
+    Returns top-k ranked instruments
+    """
+    return get_top_k(k)
+
 
 @app.get("/signals/{symbol}")
-def get_signal(symbol: str):
-    for s in signals:
-        if s["symbol"] == symbol:
-            return s
-    return {"error": "Symbol not found"}
+def signal_by_symbol(symbol: str):
+    """
+    Returns signal info for a specific instrument
+    """
+    score = r.zscore("signal_ranking", symbol)
+    if score is None:
+        return {"error": "Symbol not found"}
+
+    reasons = r.get(f"reason:{symbol}")
+    return {
+        "symbol": symbol,
+        "score": score,
+        "reasons": json.loads(reasons) if reasons else []
+    }
